@@ -137,6 +137,12 @@ var CCX={
     bulletItem(text) {
         return `<div class='listing'>&bull; ${text}</div>`;
     },
+    addLocString(text) {
+        locStrings[text]=text;
+    },
+    loadLoc() {
+        CCX.addLocString("You can also press %1 to bulk-buy or sell %2 of a building at a time, %5 for %6, or %3 for %4.");
+    },
     getInfo() {
         let str="";
         str+="<div class='listing'>";
@@ -187,8 +193,9 @@ var CCX={
         });
         Game.modHooks["draw"].push(()=>{
             if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
-            if (Game.buyBulk==50) l('storeBulk50').className='storePreButton storeBulkAmount selected'; 
-            else l('storeBulk50').className='storePreButton storeBulkAmount';
+            [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.className="storePreButton storeBulkAmount");
+            if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).className="storePreButton storeBulkAmount selected"; 
+            else l("storeBulkMax").className="storePreButton storeBulkAmount selected";
             Game.PARTY=CCX.config.party;
             if (!Game.PARTY) {
 				Game.l.style.filter="";
@@ -215,7 +222,6 @@ var CCX={
             e.innerHTML="50";
             l("storeBulk10").after(e);
         });
-        Game.BuildStore();
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", 'loc("%1 ago",startDate)', '`${loc("%1 ago",startDate)} <small>(${CCX.formatDate(new Date(Game.startDate), "M/D/Y h:m:s i")})</small>`', 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((achievementsOwned/achievementsTotal)*100)", "(Math.trunc((achievementsOwned/achievementsTotal)*10000)/100)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((upgradesOwned/upgradesTotal)*100)", "(Math.trunc((upgradesOwned/upgradesTotal)*10000)/100)", 0);
@@ -227,6 +233,12 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.bakeryNameSet", "28", "(CCX.config.nameLimit?Infinity:28)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.canLumps", "return false", "return (CCX.config.forceLumps?true:false)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.storeBulkButton", "else if (id==4) Game.buyBulk=100;", "else if (id==6) Game.buyBulk=50;", 1);
+        CCSE.ReplaceCodeIntoFunction("Game.Logic", "(Game.keys[16] || Game.keys[17]) && !Game.buyBulkShortcut", "(Game.keys[16] || Game.keys[17] || Game.keys[18]) && !Game.buyBulkShortcut", 0);
+        CCSE.ReplaceCodeIntoFunction("Game.Logic", "(!Game.keys[16] && !Game.keys[17]) && Game.buyBulkShortcut", "(!Game.keys[16] && !Game.keys[17] && !Game.keys[18]) && Game.buyBulkShortcut", 0);
+        CCSE.ReplaceCodeIntoFunction("Game.Logic", "if (Game.keys[17]) Game.buyBulk=10;", "if (Game.keys[18]) Game.buyBulk=50;", 1);
+        CCSE.ReplaceCodeIntoFunction("Game.BuildStore", "or %3 for %4", "%5 for %6, or %3 for %4", 0);
+        CCSE.ReplaceCodeIntoFunction("Game.BuildStore", `'<b>'+loc("Shift")+'</b>','<b>100</b>'`, `,\`<b>\${loc("Alt")}</b>\`,'<b>50</b>'`, 1);
+        CCSE.ReplaceCodeIntoFunction("Game.showLangSelection", '+loc("note: this will save and reload your game")+', "')('+loc('another note: translations of certain strings modified by CCX may break')+", 1);
         l("CCSEversionNumber").addEventListener("mousedown", (e)=>{
             window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");
         });
@@ -243,6 +255,8 @@ var CCX={
             }
         `;
         document.body.appendChild(e);
+        CCX.loadLoc();
+        Game.BuildStore();
         CCX.isLoaded=true;
     },
     modifyCCSE() {
