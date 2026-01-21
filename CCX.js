@@ -149,6 +149,7 @@ var CCX={
         str+=CCX.bulletItem("Name length bypass");
         str+=CCX.bulletItem("Show upgrade & achievement IDs");
         str+=CCX.bulletItem("Show upgrade, achievement, and milk icon indexes");
+        str+=CCX.bulletItem("50 bulk button");
         str+="<br>";
         str+="</div>";
         return str;
