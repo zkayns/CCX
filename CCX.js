@@ -15,23 +15,26 @@ var CCX={
         upgradeIds: false,
         milkIcons: false,
         upgradeIcons: false,
-        achievementIcons: false
+        achievementIcons: false,
+        party: false
     },
     onToggle(option) {
         let optionName=option.split(".").at(-1);
         CCX.config[optionName]=!CCX.config[optionName];
         document.getElementById(option).classList.remove("off");
         document.getElementById(option).innerHTML=`${CCX.toggleButtons.filter(i=>i.option==optionName)[0].text} ${CCX.config[optionName]?"ON":"OFF"}`;
+        CCX.toggleButtons.filter(i=>i.option==optionName)[0].onToggle();
         if (CCX.config[optionName]==false) {
             document.getElementById(option).classList.add("off");
             return false;
         };
         return true;
     },
-    toggleButton(option, text) {
+    toggleButton(option, text, action=()=>{}) {
         CCX.toggleButtons.push({
             option: option,
-            text: text
+            text: text,
+            onToggle: action
         });
         return CCSE.MenuHelper.ActionButton(CCX.toggleAction(`CCX.config.${option}`), text);
     },
@@ -60,7 +63,7 @@ var CCX={
     },
     getMenuString() {
         let str="";
-        str+="<div class='listing'>";
+        str+="<div class='listing' id='CCXlisting'>";
         str+=CCSE.MenuHelper.ActionButton("CCX.exportConfig();", "Export CCX config");
         str+=CCSE.MenuHelper.ActionButton("CCX.importConfig();", "Import CCX config");
         str+="<label>Import/export data saved by CCX</label>";
@@ -72,7 +75,7 @@ var CCX={
         str+=CCX.toggleButton("doAutoClick", "Autoclicker");
         str+="<label>Automatically clicks for you</label>";
         str+="<br>";
-        str+=CCX.toggleButton("freeStuff", "Free stuff");
+        str+=CCX.toggleButton("freeStuff", "Free stuff", Game.RefreshStore);
         str+="<label>Makes upgrades & buildings free</label>";
         str+="<br>";
         str+=CCX.toggleButton("nameLimit", "Unlimited name length");
@@ -106,6 +109,9 @@ var CCX={
         str+=CCSE.MenuHelper.InputBox("CCX.stats.lumps", 32, Game.lumps, "");
         str+=CCSE.MenuHelper.ActionButton("CCX.setLumps(parseFloat(l('CCX.stats.lumps').value));", "Set lumps");
         str+="<label>Sets your lump count</label>";
+        str+="<br>";
+        str+=CCX.toggleButton("party", "Party mode");
+        str+="<label>Toggles party mode</label>";
         str+="</div>";
         return str;
     },
@@ -119,10 +125,10 @@ var CCX={
                 h() {return String(date.getHours()%12||12).padStart(2, "0");},
                 m() {return String(date.getMinutes()).padStart(2, "0");},
                 s() {return String(date.getSeconds()).padStart(2, "0");},
-                i() {return (date.getHours()>=12?"PM":"AM")},
-                M() {return date.getMonth()+1},
-                D() {return date.getDate()},
-                Y() {return date.getFullYear()}
+                i() {return (date.getHours()>=12?"PM":"AM");},
+                M() {return date.getMonth()+1;},
+                D() {return date.getDate();},
+                Y() {return date.getFullYear();}
             };
             if (f[i]) return f[i]();
             return i;
@@ -182,6 +188,12 @@ var CCX={
             if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
             if (Game.buyBulk==50) l('storeBulk50').className='storePreButton storeBulkAmount selected'; 
             else l('storeBulk50').className='storePreButton storeBulkAmount';
+            Game.PARTY=CCX.config.party;
+            if (!Game.PARTY) {
+				Game.l.style.filter="";
+				Game.l.style.webkitFilter="";
+				Game.l.style.transform="";
+            };
         });
         document.querySelectorAll(".ad, .supportComment, .ifNoAds").forEach(i=>i.remove());
         Object.keys(Game.Upgrades).forEach(key=>{
@@ -222,6 +234,11 @@ var CCX={
         e.innerHTML=`
             #CCSEversionNumber {
                 cursor: pointer;
+            }
+            #CCXlisting input {
+                appearance: none;
+                color: #fff;
+	            background:url(img/darkNoise.jpg);
             }
         `;
         document.body.appendChild(e);
