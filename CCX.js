@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.0.0",
+    version: "1.001",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -18,6 +18,7 @@ var CCX={
         achievementIcons: false,
         party: false
     },
+    lastConfig: {},
     onToggle(option) {
         let optionName=option.split(".").at(-1);
         CCX.config[optionName]=!CCX.config[optionName];
@@ -49,10 +50,10 @@ var CCX={
         e.setAttribute("type", "file");
         e.id="CCXfileUpload";
         document.body.appendChild(e);
-        e.addEventListener("change", (e)=>{
+        AddEvent(e, "change", (e)=>{
             let file=e.target.files[0];
             let reader=new FileReader();
-            reader.addEventListener("load", (e)=>{
+            AddEvent(reader, "load", (e)=>{
                 let j=JSON.parse(e.target.result);
                 Object.keys(j).forEach(key=>CCX.config[key]=j[key]);
                 l("CCXfileUpload").remove();
@@ -81,8 +82,8 @@ var CCX={
         str+=CCX.toggleButton("nameLimit", "Unlimited name length");
         str+="<label>Removes the bakery name character limit</label>";
         str+="<br>";
-        str+=CCX.toggleButton("xray", "X-ray");
-        str+="<label>Reveals hidden crates</label>";
+        str+=CCX.toggleButton("xray", "X-ray", Game.RefreshStore);
+        str+="<label>Reveals hidden crates and buildings</label>";
         str+="<br>";
         str+=CCX.toggleButton("forceLumps", "Force lumps");
         str+="<label>Forces lump visibility (requires refresh to update)</label>";
@@ -145,8 +146,7 @@ var CCX={
     },
     getInfo() {
         let str="";
-        str+="<div class='listing'>";
-        str+=CCX.bulletItem("Features");
+        str+="<div class='listing'>Features";
         str+=CCX.bulletItem("Accurate upgrade & achievement unlock percentages")
         str+=CCX.bulletItem("Stat editors");
         str+=CCX.bulletItem("X-ray");
@@ -156,6 +156,7 @@ var CCX={
         str+=CCX.bulletItem("Show upgrade & achievement IDs");
         str+=CCX.bulletItem("Show upgrade, achievement, and milk icon indexes");
         str+=CCX.bulletItem("50 bulk button");
+        str+=CCX.bulletItem("Start date in stats menu");
         str+="<br>";
         str+="</div>";
         return str;
@@ -167,6 +168,7 @@ var CCX={
         CCSE.customSave.push(()=>{
             localStorageSet("CCX", JSON.stringify(CCX.config));
         });
+        CCX.loadLoc();
         Game.customOptionsMenu.push(()=>{
             CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getMenuString());
             CCX.toggleButtons.forEach(tb=>{
@@ -190,18 +192,6 @@ var CCX={
         Game.customReset.push((hard)=>{
             localStorage.removeItem("CCX");
             CCX.config=CCX.configDefaults;
-        });
-        Game.modHooks["draw"].push(()=>{
-            if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
-            [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.className="storePreButton storeBulkAmount");
-            if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).className="storePreButton storeBulkAmount selected"; 
-            else l("storeBulkMax").className="storePreButton storeBulkAmount selected";
-            Game.PARTY=CCX.config.party;
-            if (!Game.PARTY) {
-				Game.l.style.filter="";
-				Game.l.style.webkitFilter="";
-				Game.l.style.transform="";
-            };
         });
         document.querySelectorAll(".ad, .supportComment, .ifNoAds").forEach(i=>i.remove());
         Object.keys(Game.Upgrades).forEach(key=>{
@@ -239,10 +229,15 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.BuildStore", "or %3 for %4", "%5 for %6, or %3 for %4", 0);
         CCSE.ReplaceCodeIntoFunction("Game.BuildStore", `'<b>'+loc("Shift")+'</b>','<b>100</b>'`, `,\`<b>\${loc("Alt")}</b>\`,'<b>50</b>'`, 1);
         CCSE.ReplaceCodeIntoFunction("Game.showLangSelection", '+loc("note: this will save and reload your game")+', "')('+loc('another note: translations of certain strings modified by CCX may break')+", 1);
-        l("CCSEversionNumber").addEventListener("mousedown", (e)=>{
+        CCX.hookObjects();
+        let e=l("CCSEversionNumber").cloneNode();
+        e.innerHTML=`CCX v. ${CCX.version}`;
+        e.id="CCXversionNumber";
+        l("CCSEversionNumber").after(e);
+        AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{
             window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");
         });
-        let e=document.createElement("style");
+        e=document.createElement("style");
         e.id="CCXstyles";
         e.innerHTML=`
             #CCSEversionNumber {
@@ -253,11 +248,55 @@ var CCX={
                 color: #fff;
 	            background:url(img/darkNoise.jpg);
             }
+            .lockedTitle.CCXxray {
+                display: none !important;
+            }
+            .title.CCXxray {
+                display: block !important;
+            }       
+            .product.CCXxray {
+                opacity: 1 !important;
+                display: block !important;
+            }
         `;
         document.body.appendChild(e);
-        CCX.loadLoc();
+        Game.modHooks["draw"].push(()=>{
+            CCX.hookObjects(); // in case any new objects have been added that we need to hook
+            if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
+            [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.classList.remove("selected"));
+            if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).classList.add("selected");
+            else if (Game.buyBulk==-1) l("storeBulkMax").classList.add("selected");
+            Game.PARTY=CCX.config.party;
+            if (!Game.PARTY) {
+				Game.l.style.filter="";
+				Game.l.style.webkitFilter="";
+				Game.l.style.transform="";
+            };
+            if (CCX.config.xray) {
+                [
+                    ".lockedTitle",
+                    ".product.locked .title",
+                    ".product"
+                ].forEach(i=>[...document.querySelectorAll(i)].forEach(o=>o.classList.add("CCXxray")));
+            } else [...document.querySelectorAll(".CCXxray")].forEach(i=>i.classList.remove("CCXxray"));
+            CCX.lastConfig=structuredClone(CCX.config);
+        });
         Game.BuildStore();
         CCX.isLoaded=true;
+    },
+    hookObjects() {
+        for (let i in Game.Objects) {
+            if (Game.Objects[i].hookedByCCX) continue;
+            CCSE.ReplaceCodeIntoFunction(`Game.Objects["${i}"].tooltip`, "if (me.locked)", "if (me.locked&&!CCX.config.xray)", 0);
+            CCSE.ReplaceCodeIntoFunction(`Game.Objects["${i}"].rebuild`, "var iconOff=[1,me.icon];", "if (CCX.config.xray) iconOff=[0,me.icon];", 1);
+            CCX.nextLineHook(`Game.Objects["${i}"].rebuild`, "iconOff=", "AddEvent(l(`product${me.id}`), 'contextmenu', (e)=>{e.preventDefault()});");
+            Game.Objects[i].hookedByCCX=true;
+        };
+        return true;
+    },
+    nextLineHook(func, find, add) {
+        let lines=String(eval(func)).split("\n");
+        CCSE.SpliceCodeIntoFunction(func, lines.indexOf(lines.filter(i=>i.includes(find))[0])+1, add);
     },
     modifyCCSE() {
         if (!CCSE.MenuHelper.NeatoButton) CCSE.MenuHelper.NeatoButton=(action, text)=>{
