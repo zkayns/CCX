@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.001",
+    version: "1.002",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -18,20 +18,23 @@ var CCX={
         achievementIcons: false,
         party: false
     },
+    savedInputs: {},
+    savedSelection: "none",
     lastConfig: {},
+    dirtyInputs: [],
     onToggle(option) {
         let optionName=option.split(".").at(-1);
         CCX.config[optionName]=!CCX.config[optionName];
         document.getElementById(option).classList.remove("off");
         document.getElementById(option).innerHTML=`${CCX.toggleButtons.filter(i=>i.option==optionName)[0].text} ${CCX.config[optionName]?"ON":"OFF"}`;
-        CCX.toggleButtons.filter(i=>i.option==optionName)[0].onToggle();
+        CCX.toggleButtons.filter(i=>i.option==optionName)[0].onToggle(CCX.config[optionName]);
         if (CCX.config[optionName]==false) {
             document.getElementById(option).classList.add("off");
             return false;
         };
         return true;
     },
-    toggleButton(option, text, action=()=>{}) {
+    toggleButton(option, text, action=(state)=>{}) {
         CCX.toggleButtons.push({
             option: option,
             text: text,
@@ -68,7 +71,6 @@ var CCX={
         str+=CCSE.MenuHelper.ActionButton("CCX.exportConfig();", "Export CCX config");
         str+=CCSE.MenuHelper.ActionButton("CCX.importConfig();", "Import CCX config");
         str+="<label>Import/export data saved by CCX</label>";
-        str+="<br>";
         str+=CCSE.MenuHelper.ActionButton("Game.OpenSesame();", "Open sesame");
         str+="<label>Hax!</label>";
         str+="<br>";
@@ -77,7 +79,7 @@ var CCX={
         str+="<label>Automatically clicks for you</label>";
         str+="<br>";
         str+=CCX.toggleButton("freeStuff", "Free stuff", Game.RefreshStore);
-        str+="<label>Makes upgrades & buildings free</label>";
+        str+="<label>Makes upgrades, buildings, & levelups free</label>";
         str+="<br>";
         str+=CCX.toggleButton("nameLimit", "Unlimited name length");
         str+="<label>Removes the bakery name character limit</label>";
@@ -85,8 +87,8 @@ var CCX={
         str+=CCX.toggleButton("xray", "X-ray", Game.RefreshStore);
         str+="<label>Reveals hidden crates and buildings</label>";
         str+="<br>";
-        str+=CCX.toggleButton("forceLumps", "Force lumps");
-        str+="<label>Forces lump visibility (requires refresh to update)</label>";
+        str+=CCX.toggleButton("forceLumps", "Force lumps", (state)=>{Game.addClass(`lumps${state?"On":"Off"}`)});
+        str+="<label>Force enables sugar lumps</label>";
         str+="<br>";
         str+=CCX.toggleButton("achievementIds", "Show achievement IDs");
         str+="<label>Shows achievement IDs as crate tags</label>";
@@ -104,11 +106,11 @@ var CCX={
         str+="<label>Shows icon indexes in milk tooltips</label>";
         str+="<br>";
         str+=CCSE.MenuHelper.InputBox("CCX.stats.cookies", 64, Math.floor(Game.cookies), "");
-        str+=CCSE.MenuHelper.ActionButton("Game.cookies=Math.floor(parseFloat(l('CCX.stats.cookies').value));", "Set cookies");
+        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('cookies');", "Set cookies", "CCX.statButtons.cookies");
         str+="<label>Sets your cookie count</label>";
         str+="<br>";
         str+=CCSE.MenuHelper.InputBox("CCX.stats.lumps", 32, Game.lumps, "");
-        str+=CCSE.MenuHelper.ActionButton("CCX.setLumps(parseFloat(l('CCX.stats.lumps').value));", "Set lumps");
+        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('lumps');", "Set lumps", "CCX.statButtons.lumps");
         str+="<label>Sets your lump count</label>";
         str+="<br>";
         str+=CCX.toggleButton("party", "Party mode");
@@ -172,13 +174,21 @@ var CCX={
         Game.customOptionsMenu.push(()=>{
             CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getMenuString());
             CCX.toggleButtons.forEach(tb=>{
-                if (!CCX.config[tb.option]) document.getElementById(`CCX.config.${tb.option}`).classList.add("off");
-                document.getElementById(`CCX.config.${tb.option}`).innerHTML=`${tb.text} <strong>${CCX.config[tb.option]?"ON":"OFF"}</strong>`;
-                document.getElementById(`CCX.config.${tb.option}`).classList.add("prefButton");
+                if (!CCX.config[tb.option]) l(`CCX.config.${tb.option}`).classList.add("off");
+                l(`CCX.config.${tb.option}`).innerHTML=`${tb.text} <strong>${CCX.config[tb.option]?"ON":"OFF"}</strong>`;
+                l(`CCX.config.${tb.option}`).classList.add("prefButton");
             });
         });
         Game.customInfoMenu.push(()=>{
             CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getInfo());
+        });
+        Game.customOptionsMenu.push(()=>{
+            Object.keys(CCX.savedInputs).filter(k=>l(k)&&l(k).id).forEach(k=>l(k).value=CCX.savedInputs[k]);
+            if (CCX.savedSelection!="none"&&l(CCX.savedSelection.id)) {
+                l(CCX.savedSelection.id).focus();
+                l(CCX.savedSelection.id).setSelectionRange(CCX.savedSelection.start, CCX.savedSelection.end);
+            };
+            CCX.addMenuListeners();
         });
         Game.customOpenSesame.push(()=>{
             let str="";
@@ -213,6 +223,8 @@ var CCX={
             l("storeBulk10").after(e);
         });
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", 'loc("%1 ago",startDate)', '`${loc("%1 ago",startDate)} <small>(${CCX.formatDate(new Date(Game.startDate), "M/D/Y h:m:s i")})</small>`', 0);
+        CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "l('menu').innerHTML=str;", 'if (Game.onMenu=="prefs") {[...(l("menu").querySelectorAll("input"))].filter(i=>i?.id).forEach(i=>CCX.savedInputs[i.id]=i?.value);};', -1);
+        CCSE.SpliceCodeIntoFunction("Game.UpdateMenu", 2, 'if (Game.onMenu=="prefs") {if (getSelection().rangeCount) {CCX.savedSelection=structuredClone({start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd, id: document.activeElement?.id});} else {CCX.savedSelection="none";};};');
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((achievementsOwned/achievementsTotal)*100)", "(Math.trunc((achievementsOwned/achievementsTotal)*10000)/100)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((upgradesOwned/upgradesTotal)*100)", "(Math.trunc((upgradesOwned/upgradesTotal)*10000)/100)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "' - '+milk.name", "' - '+milk.name+(CCX.config.milkIcons?` ${JSON.stringify(milk.icon)}`:'')", 0);
@@ -221,7 +233,7 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.crateTooltip", `("Click to lose!"),'#00c462');`, `if (CCX.config.achievementIds) tags.push(loc(\`id \${me.id} \`),'#9700cf'); if (CCX.config.achievementIcons) tags.push(loc(\`icon \${JSON.stringify(me.icon)} \`),'#9700cf');`, 1);
         CCSE.ReplaceCodeIntoFunction("Game.crateTooltip", `"Vaulted"),'#4e7566');`, `if (CCX.config.upgradeIds) tags.push(loc(\`id \${me.id} \`),'#9700cf'); if (CCX.config.upgradeIcons) tags.push(loc(\`icon \${JSON.stringify(me.icon)} \`),'#9700cf');`, 1);
         CCSE.ReplaceCodeIntoFunction("Game.bakeryNameSet", "28", "(CCX.config.nameLimit?Infinity:28)", 0);
-        CCSE.ReplaceCodeIntoFunction("Game.canLumps", "return false", "return (CCX.config.forceLumps?true:false)", 0);
+        CCSE.ReplaceCodeIntoFunction("Game.canLumps", "Game.canLumps injection point 0", "if (CCX.config.forceLumps) return true;", 1);
         CCSE.ReplaceCodeIntoFunction("Game.storeBulkButton", "else if (id==4) Game.buyBulk=100;", "else if (id==6) Game.buyBulk=50;", 1);
         CCSE.ReplaceCodeIntoFunction("Game.Logic", "(Game.keys[16] || Game.keys[17]) && !Game.buyBulkShortcut", "(Game.keys[16] || Game.keys[17] || Game.keys[18]) && !Game.buyBulkShortcut", 0);
         CCSE.ReplaceCodeIntoFunction("Game.Logic", "(!Game.keys[16] && !Game.keys[17]) && Game.buyBulkShortcut", "(!Game.keys[16] && !Game.keys[17] && !Game.keys[18]) && Game.buyBulkShortcut", 0);
@@ -229,18 +241,18 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.BuildStore", "or %3 for %4", "%5 for %6, or %3 for %4", 0);
         CCSE.ReplaceCodeIntoFunction("Game.BuildStore", `'<b>'+loc("Shift")+'</b>','<b>100</b>'`, `,\`<b>\${loc("Alt")}</b>\`,'<b>50</b>'`, 1);
         CCSE.ReplaceCodeIntoFunction("Game.showLangSelection", '+loc("note: this will save and reload your game")+', "')('+loc('another note: translations of certain strings modified by CCX may break')+", 1);
+        CCSE.ReplaceCodeIntoFunction("Game.spendLump", "ask if we want to spend N lumps (unless free)", "if (CCX.config.freeStuff) free=true;", 1);
         CCX.hookObjects();
-        let e=l("CCSEversionNumber").cloneNode();
+        AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");});
+        e=l("CCSEversionNumber").cloneNode();
         e.innerHTML=`CCX v. ${CCX.version}`;
         e.id="CCXversionNumber";
         l("CCSEversionNumber").after(e);
-        AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{
-            window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");
-        });
+        AddEvent(e, "mousedown", (e)=>{window.open("https://github.com/zkayns/CCX", "_blank");});
         e=document.createElement("style");
         e.id="CCXstyles";
         e.innerHTML=`
-            #CCSEversionNumber {
+            #CCSEversionNumber, #CCXversionNumber {
                 cursor: pointer;
             }
             #CCXlisting input {
@@ -260,27 +272,7 @@ var CCX={
             }
         `;
         document.body.appendChild(e);
-        Game.modHooks["draw"].push(()=>{
-            CCX.hookObjects(); // in case any new objects have been added that we need to hook
-            if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
-            [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.classList.remove("selected"));
-            if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).classList.add("selected");
-            else if (Game.buyBulk==-1) l("storeBulkMax").classList.add("selected");
-            Game.PARTY=CCX.config.party;
-            if (!Game.PARTY) {
-				Game.l.style.filter="";
-				Game.l.style.webkitFilter="";
-				Game.l.style.transform="";
-            };
-            if (CCX.config.xray) {
-                [
-                    ".lockedTitle",
-                    ".product.locked .title",
-                    ".product"
-                ].forEach(i=>[...document.querySelectorAll(i)].forEach(o=>o.classList.add("CCXxray")));
-            } else [...document.querySelectorAll(".CCXxray")].forEach(i=>i.classList.remove("CCXxray"));
-            CCX.lastConfig=structuredClone(CCX.config);
-        });
+        Game.modHooks["draw"].push(CCX.draw);
         Game.BuildStore();
         CCX.isLoaded=true;
     },
@@ -294,17 +286,62 @@ var CCX={
         };
         return true;
     },
+    addMenuListeners() {
+        [...l("menu").querySelectorAll("input")].forEach(i=>{
+            AddEvent(i, "focus", (e)=>CCX.dirtyInputs.push(e.target.id));
+        });
+    },
+    draw() {
+        CCX.hookObjects(); // in case any new objects have been added that we need to hook
+        if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
+        [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.classList.remove("selected"));
+        if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).classList.add("selected");
+        else if (Game.buyBulk==-1) l("storeBulkMax").classList.add("selected");
+        Game.PARTY=CCX.config.party;
+        if (!Game.PARTY) {
+			Game.l.style.filter="";
+			Game.l.style.webkitFilter="";
+			Game.l.style.transform="";
+        };
+        if (CCX.config.xray) {
+            [
+                ".lockedTitle",
+                ".product.locked .title",
+                ".product"
+            ].forEach(i=>[...document.querySelectorAll(i)].forEach(o=>o.classList.add("CCXxray")));
+        } else [...document.querySelectorAll(".CCXxray")].forEach(i=>i.classList.remove("CCXxray"));
+        if (Game.onMenu=="prefs") {
+            CCX.inputSetStat(l("CCX.stats.cookies"), Game.cookies);
+            CCX.inputSetStat(l("CCX.stats.lumps"), Game.lumps);
+        };
+        CCX.lastConfig=structuredClone(CCX.config);
+    },
+    inputSetStat(e, stat) {
+        if (!CCX.dirtyInputs.includes(e.id)&&document.activeElement!=e) e.value=stat;
+    },
+    menuStatChange(stat) {
+        Game[stat]=(()=>{switch (typeof Game[stat]) {
+            case "string":
+                return String(l(`CCX.stats.${stat}`).value);
+            case "number":
+            default:
+                return parseFloat(l(`CCX.stats.${stat}`).value);
+        }})();
+        CCX.dirtyInputs=CCX.dirtyInputs.filter(i=>i!=`CCX.stats.${stat}`);
+    },
     nextLineHook(func, find, add) {
         let lines=String(eval(func)).split("\n");
         CCSE.SpliceCodeIntoFunction(func, lines.indexOf(lines.filter(i=>i.includes(find))[0])+1, add);
     },
     modifyCCSE() {
         if (!CCSE.MenuHelper.NeatoButton) CCSE.MenuHelper.NeatoButton=(action, text)=>{
-            return `<a class="option neato" ${Game.clickStr}="${action}">${text}</a>`
+            return `<a class="option neato" ${Game.clickStr}="${action}">${text}</a>`;
         };
         if (!CCSE.MenuHelper.Line) CCSE.MenuHelper.Line=()=>{
             return `<div class="line"></div>`;
         };
+        CCSE.ReplaceCodeIntoFunction("CCSE.MenuHelper.ActionButton", "(action, text)", "(action, text, id='')", 0);
+        CCX.nextLineHook("CCSE.MenuHelper.ActionButton", "<a class=", "(id?` id='${id}'`:'')+");
     }
 };
 if (!CCX.isLoaded) {
