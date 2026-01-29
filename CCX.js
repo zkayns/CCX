@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.003",
+    version: "1.004",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -24,6 +24,9 @@ var CCX={
     dirtyInputs: [],
     keys: {},
     numbersAndShifts: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
+    menuBreak(first) {
+        return `${first?"":"</div>"}<div class="CCXmenuItem">`;
+    },
     onToggle(option) {
         let optionName=option.split(".").at(-1);
         CCX.config[optionName]=!CCX.config[optionName];
@@ -70,56 +73,57 @@ var CCX={
     getMenuString() {
         let str="";
         str+="<div class='listing' id='CCXlisting'>";
-        str+=CCSE.MenuHelper.SearchBox("CCX.menu.search", 256, "", CCX.updateSearch);
-        str+="<br>";
+        str+=CCSE.MenuHelper.SearchBox("CCX.menu.search", 256, "", "CCX.updateSearch()");
+        str+=CCX.menuBreak(true);
         str+=CCSE.MenuHelper.ActionButton("CCX.exportConfig();", "Export CCX config");
         str+=CCSE.MenuHelper.ActionButton("CCX.importConfig();", "Import CCX config");
         str+="<label>Import/export data saved by CCX</label>";
+        str+=CCX.menuBreak();
         str+=CCSE.MenuHelper.ActionButton("Game.OpenSesame();", "Open sesame");
         str+="<label>Hax!</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCSE.MenuHelper.InputBox("CCX.config.autoClickTime", 32, CCX.config.autoClickTime, "CCX.config.autoClickTime=parseFloat(document.getElementById('CCX.config.autoClickTime').value);");
         str+=CCX.toggleButton("doAutoClick", "Autoclicker");
         str+="<label>Automatically clicks for you</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("freeStuff", "Free stuff", Game.RefreshStore);
         str+="<label>Makes upgrades, buildings, & levelups free</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("nameLimit", "Unlimited name length");
         str+="<label>Removes the bakery name character limit</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("xray", "X-ray", Game.RefreshStore);
         str+="<label>Reveals hidden crates and buildings</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("forceLumps", "Force lumps", (state)=>{Game.addClass(`lumps${state?"On":"Off"}`)});
         str+="<label>Force enables sugar lumps</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("achievementIds", "Show achievement IDs");
         str+="<label>Shows achievement IDs as crate tags</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("achievementIcons", "Show achievement icon indexes");
         str+="<label>Shows achievement icon indexes as crate tags</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("upgradeIds", "Show upgrade IDs");
         str+="<label>Shows upgrade IDs as crate tags</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("upgradeIcons", "Show upgrade icon indexes");
         str+="<label>Shows upgrade icon indexes as crate tags</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("milkIcons", "Show milk icon indexes");
         str+="<label>Shows icon indexes in milk tooltips</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCSE.MenuHelper.InputBox("CCX.stats.cookies", 64, Math.floor(Game.cookies), "");
         str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('cookies');", "Set cookies", "CCX.statButtons.cookies");
         str+="<label>Sets your cookie count</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCSE.MenuHelper.InputBox("CCX.stats.lumps", 32, Game.lumps, "");
         str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('lumps');", "Set lumps", "CCX.statButtons.lumps");
         str+="<label>Sets your lump count</label>";
-        str+="<br>";
+        str+=CCX.menuBreak();
         str+=CCX.toggleButton("party", "Party mode");
         str+="<label>Toggles party mode</label>";
-        str+="</div>";
+        str+="</div></div>";
         return str;
     },
     setLumps(lumps) {
@@ -172,9 +176,7 @@ var CCX={
         CCX.modifyCCSE();
         CCX.configDefaults=structuredClone(CCX.config);
         if (localStorageGet("CCX")) CCX.config=JSON.parse(localStorageGet("CCX"));
-        CCSE.customSave.push(()=>{
-            localStorageSet("CCX", JSON.stringify(CCX.config));
-        });
+        CCSE.customSave.push(()=>{localStorageSet("CCX", JSON.stringify(CCX.config));});
         CCX.loadLoc();
         Game.customOptionsMenu.push(()=>{
             CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getMenuString());
@@ -194,6 +196,7 @@ var CCX={
                 l(CCX.savedSelection.id).setSelectionRange(CCX.savedSelection.start, CCX.savedSelection.end);
             };
             CCX.addMenuListeners();
+            CCX.updateSearch();
         });
         Game.customOpenSesame.push(()=>{
             let str="";
@@ -277,6 +280,24 @@ var CCX={
                 opacity: 1 !important;
                 display: block !important;
             }
+            .CCXmenuItem label {
+	            font-size: 11px;
+	            color: rgba(255, 255, 255, 0.5);
+	            border-bottom: 1px dashed rgba(255, 255, 255, 0.25);
+	            padding: 2px 8px;
+            }
+            .CCXmenuItem b {
+	            font-weight: bold;
+	            opacity: 0.6;
+            }
+            .CCXmenuItem small {
+	            font-size: 11px;
+	            opacity: 0.9;
+            }
+            .CCXmenuItem {
+	            padding: 0px 0px;
+	            font-size: 13px;
+            }
         `;
         document.body.appendChild(e);
         Game.modHooks["draw"].push(CCX.draw);
@@ -296,6 +317,17 @@ var CCX={
         if (CCX.numbersAndShifts.includes(e.key)&&(CCX.keys["b"]||CCX.keys["B"])) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].buy(1);
     },
     updateSearch() {
+        let query=l("CCX.menu.search").value;
+        [...document.querySelectorAll(".CCXmenuItem")].forEach(i=>{
+            let hit=0;
+            if (query=="") hit=true;
+            [...i.children].forEach(c=>{if (c.innerHTML.toLowerCase().includes(query.toLowerCase())) hit=true;});
+            if (hit) {
+                i.style["display"]="block";
+                return;
+            };
+            i.style["display"]="none";
+        });
     },
     hookObjects() {
         for (let i in Game.Objects) {
@@ -308,9 +340,9 @@ var CCX={
         return true;
     },
     addMenuListeners() {
-        [...l("menu").querySelectorAll("input")].forEach(i=>{
-            AddEvent(i, "focus", (e)=>CCX.dirtyInputs.push(e.target.id));
-        });
+        [...l("menu").querySelectorAll("input")].forEach(i=>{AddEvent(i, "focus", (e)=>CCX.dirtyInputs.push(e.target.id));});
+        AddEvent(l("CCX.menu.search"), "keydown", CCX.updateSearch);
+        AddEvent(l("CCX.menu.search"), "keyup", CCX.updateSearch);
     },
     draw() {
         CCX.hookObjects(); // in case any new objects have been added that we need to hook
@@ -334,12 +366,10 @@ var CCX={
             ].forEach(i=>[...document.querySelectorAll(i)].forEach(o=>o.classList.add("CCXxray")));
         } else [...document.querySelectorAll(".CCXxray")].forEach(i=>i.classList.remove("CCXxray"));
         if (Game.onMenu=="prefs") {
-            CCX.inputSetStat(l("CCX.stats.cookies"), Game.cookies);
-            CCX.inputSetStat(l("CCX.stats.lumps"), Game.lumps);
+            CCX.inputSetStat(l("CCX.stats.cookies"), Math.round(Game.cookies));
+            CCX.inputSetStat(l("CCX.stats.lumps"), Math.round(Game.lumps));
         };
-        Object.keys(CCX.keys).forEach(k=>{
-            if (CCX.keys[k]) CCX.keys[k]++;
-        });
+        Object.keys(CCX.keys).forEach(k=>{if (CCX.keys[k]) CCX.keys[k]++;});
         CCX.lastConfig=structuredClone(CCX.config);
     },
     inputSetStat(e, stat) {
