@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.002",
+    version: "1.003",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -22,6 +22,8 @@ var CCX={
     savedSelection: "none",
     lastConfig: {},
     dirtyInputs: [],
+    keys: {},
+    numbersAndShifts: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
     onToggle(option) {
         let optionName=option.split(".").at(-1);
         CCX.config[optionName]=!CCX.config[optionName];
@@ -68,6 +70,8 @@ var CCX={
     getMenuString() {
         let str="";
         str+="<div class='listing' id='CCXlisting'>";
+        str+=CCSE.MenuHelper.SearchBox("CCX.menu.search", 256, "", CCX.updateSearch);
+        str+="<br>";
         str+=CCSE.MenuHelper.ActionButton("CCX.exportConfig();", "Export CCX config");
         str+=CCSE.MenuHelper.ActionButton("CCX.importConfig();", "Import CCX config");
         str+="<label>Import/export data saved by CCX</label>";
@@ -146,7 +150,7 @@ var CCX={
     loadLoc() {
         CCX.addLocString("You can also press %1 to bulk-buy or sell %2 of a building at a time, %5 for %6, or %3 for %4.");
     },
-    getInfo() {
+    getInfoString() {
         let str="";
         str+="<div class='listing'>Features";
         str+=CCX.bulletItem("Accurate upgrade & achievement unlock percentages")
@@ -159,6 +163,7 @@ var CCX={
         str+=CCX.bulletItem("Show upgrade, achievement, and milk icon indexes");
         str+=CCX.bulletItem("50 bulk button");
         str+=CCX.bulletItem("Start date in stats menu");
+        str+=CCX.bulletItem("Binds to buy & sell buildings");
         str+="<br>";
         str+="</div>";
         return str;
@@ -180,7 +185,7 @@ var CCX={
             });
         });
         Game.customInfoMenu.push(()=>{
-            CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getInfo());
+            CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getInfoString());
         });
         Game.customOptionsMenu.push(()=>{
             Object.keys(CCX.savedInputs).filter(k=>l(k)&&l(k).id).forEach(k=>l(k).value=CCX.savedInputs[k]);
@@ -253,12 +258,14 @@ var CCX={
         e.id="CCXstyles";
         e.innerHTML=`
             #CCSEversionNumber, #CCXversionNumber {
-                cursor: pointer;
+                cursor: pointer; !important
             }
             #CCXlisting input {
                 appearance: none;
-                color: #fff;
-	            background:url(img/darkNoise.jpg);
+                color: #fff; 
+	            background: url(img/darkNoise.jpg);
+                border-color: #ece2b6 #875526 #733726 #dfbc9a; 
+	            border-radius:4px;
             }
             .lockedTitle.CCXxray {
                 display: none !important;
@@ -273,8 +280,22 @@ var CCX={
         `;
         document.body.appendChild(e);
         Game.modHooks["draw"].push(CCX.draw);
+        AddEvent(window, "keydown", CCX.keyDown);
+        AddEvent(window, "keyup", CCX.keyUp);
         Game.BuildStore();
         CCX.isLoaded=true;
+    },
+    keyUp(e) {
+        if (document.activeElement?.tagName=="INPUT") return;
+        delete CCX.keys[e.key];
+        if (e.key=="s"||e.key=="S") Game.storeBulkButton(0);
+    },
+    keyDown(e) {
+        if (document.activeElement?.tagName=="INPUT") return;
+        CCX.keys[e.key]=1;
+        if (CCX.numbersAndShifts.includes(e.key)&&(CCX.keys["b"]||CCX.keys["B"])) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].buy(1);
+    },
+    updateSearch() {
     },
     hookObjects() {
         for (let i in Game.Objects) {
@@ -293,6 +314,8 @@ var CCX={
     },
     draw() {
         CCX.hookObjects(); // in case any new objects have been added that we need to hook
+        if (CCX.keys["b"]||CCX.keys["B"]) Game.buyBulk=1;
+        if (CCX.keys["s"]||CCX.keys["S"]) Game.storeBulkButton(1);
         if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
         [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.classList.remove("selected"));
         if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).classList.add("selected");
@@ -314,6 +337,9 @@ var CCX={
             CCX.inputSetStat(l("CCX.stats.cookies"), Game.cookies);
             CCX.inputSetStat(l("CCX.stats.lumps"), Game.lumps);
         };
+        Object.keys(CCX.keys).forEach(k=>{
+            if (CCX.keys[k]) CCX.keys[k]++;
+        });
         CCX.lastConfig=structuredClone(CCX.config);
     },
     inputSetStat(e, stat) {
