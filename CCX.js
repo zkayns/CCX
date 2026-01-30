@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.006",
+    version: "1.007",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -16,8 +16,10 @@ var CCX={
         milkIcons: false,
         upgradeIcons: false,
         achievementIcons: false,
-        party: false
+        party: false,
+        disableCPSRecalc: false
     },
+    temp: {},
     savedInputs: {},
     savedSelection: "none",
     savedScroll: -1,
@@ -25,6 +27,20 @@ var CCX={
     dirtyInputs: [],
     keys: {},
     prefEnums: {},
+    editorIncludeTypes: ["number", "string", "boolean"],
+    p: {
+        recalc: [
+            "cookiesPs", 
+            "cookiesPsRaw", 
+            "cookiesPsRawHighest", 
+            "cpsSucked", 
+            "cookiesPsByType", 
+            "buildingCps", 
+            "computedMouseCps", 
+            "globalCpsMult", 
+            "unbuffedCps"
+        ]
+    },
     statOps: ["SET", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"],
     numbersAndShifts: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
     menuBreak(first) {
@@ -131,15 +147,34 @@ var CCX={
         str+=CCX.menuBreak();
         str+=CCSE.MenuHelper.ActionButton("CCX.showBakeryNameList();", "Show bakery names");
         str+="<label>Shows a list of all possible random bakery names</label>";
+        str+=CCX.menuBreak();
+        str+=CCSE.MenuHelper.ActionButton("CCX.openEditor();", "Open editor");
+        str+="<label>Opens the editor</label>";
+        str+=CCX.menuBreak();
+        str+=CCX.toggleButton("disableCPSRecalc", "Disable CPS recalculation", (state)=>{if (!state) Game.CalculateGains()});
+        str+="<label>Disables recalculation of cookies per second</label>";
         str+="</div></div>";
         return str;
+    },
+    openEditor() {
+        Game.Prompt(`<textarea spellcheck='false' class='CCXeditorArea'></textarea>`, [[loc("Save"), "CCX.doEditorSave();"], [loc("Sync"), "CCX.syncEditorContent();"], [loc("Close"), "Game.ClosePrompt();"]], "", "CCXeditorPrompt");
+        CCX.syncEditorContent();
+    },
+    syncEditorContent() {
+        let d={};
+        for (let i in Game) if (i!="updateLog"&&CCX.editorIncludeTypes.includes(typeof Game[i])) d[i]=structuredClone(Game[i]);
+        document.querySelector(".CCXeditorArea").value=JSON.stringify(d, null, "\t");
+    },
+    doEditorSave() {
+        let d=JSON.parse(document.querySelector(".CCXeditorArea").value);
+        for (let i in d) Game[i]=d[i];
     },
     showBakeryNameList() {
         let part1=['Magic','Fantastic','Fancy','Sassy','Snazzy','Pretty','Cute','Pirate','Ninja','Zombie','Robot','Radical','Urban','Cool','Hella','Sweet','Awful','Double','Triple','Turbo','Techno','Disco','Electro','Dancing','Wonder','Mutant','Space','Science','Medieval','Future','Captain','Bearded','Lovely','Tiny','Big','Fire','Water','Frozen','Metal','Plastic','Solid','Liquid','Moldy','Shiny','Happy','Happy Little','Slimy','Tasty','Delicious','Hungry','Greedy','Lethal','Professor','Doctor','Power','Chocolate','Crumbly','Choklit','Righteous','Glorious','Mnemonic','Psychic','Frenetic','Hectic','Crazy','Royal','El','Von'];
         let part2=['Cookie','Biscuit','Muffin','Scone','Cupcake','Pancake','Chip','Sprocket','Gizmo','Puppet','Mitten','Sock','Teapot','Mystery','Baker','Cook','Grandma','Click','Clicker','Spaceship','Factory','Portal','Machine','Experiment','Monster','Panic','Burglar','Bandit','Booty','Potato','Pizza','Burger','Sausage','Meatball','Spaghetti','Macaroni','Kitten','Puppy','Giraffe','Zebra','Parrot','Dolphin','Duckling','Sloth','Turtle','Goblin','Pixie','Gnome','Computer','Pirate','Ninja','Zombie','Robot'];
         let names=new Array();
         for (let i in part1) for (let o in part2) names.push(`${part1[i]} ${part2[o]}`);
-        Game.Prompt(`<h3>Bakery Names</h3><textarea class='CCXbakeryNamesArea'>${names.join("\n")}</textarea>`, [loc("Close")]);
+        Game.Prompt(`<h3>Bakery Names</h3><textarea spellcheck='false' class='CCXbakeryNamesArea'>${names.join("\n")}</textarea>`, [loc("Close")]);
     },
     setLumps(lumps) {
         Game.lumpsTotal+=lumps-Game.lumps;
@@ -267,6 +302,7 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.BuildStore", `'<b>'+loc("Shift")+'</b>','<b>100</b>'`, `,\`<b>\${loc("Alt")}</b>\`,'<b>50</b>'`, 1);
         CCSE.ReplaceCodeIntoFunction("Game.showLangSelection", '+loc("note: this will save and reload your game")+', "')('+loc('another note: translations of certain strings modified by CCX may break')+", 1);
         CCSE.ReplaceCodeIntoFunction("Game.spendLump", "ask if we want to spend N lumps (unless free)", "if (CCX.config.freeStuff) free=true;", 1);
+        CCSE.ReplaceCodeIntoFunction("Game.CalculateGains", "Game.cookiesPs=0;", "CCX.writeToTemp(...CCX.p.recalc);", -1);
         CCX.hookObjects();
         AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");});
         e=l("CCSEversionNumber").cloneNode();
@@ -280,8 +316,11 @@ var CCX={
             #CCSEversionNumber, #CCXversionNumber {
                 cursor: pointer; !important
             }
-            .CCXbakeryNamesArea {
+            .CCXbakeryNamesArea, .CCXeditorArea {
                 height: 400px; 
+            }
+            .CCXeditorArea {
+                font-size: 11px;
             }
             #CCXlisting input {
                 appearance: none;
@@ -321,11 +360,24 @@ var CCX={
         `;
         document.body.appendChild(e);
         Game.modHooks["draw"].push(CCX.draw);
+        Game.modHooks["cps"].push((input)=>{
+            if (CCX.config.disableCPSRecalc) {
+                CCX.readFromTemp(...CCX.p.recalc);
+                return CCX.temp["cookiesPs"];
+            };
+            return input;
+        });
         AddEvent(window, "keydown", CCX.keyDown);
         AddEvent(window, "keyup", CCX.keyUp);
         Game.BuildStore();
         if (Game.onMenu) Game.UpdateMenu(); // prevents a crash if the mod finishes loading while prefs are open
         CCX.isLoaded=true;
+    },
+    readFromTemp() {
+        for (let i in arguments) Game[arguments[i]]=structuredClone(CCX.temp[arguments[i]])??Game[arguments[i]];
+    },
+    writeToTemp() {
+        for (let i in arguments) CCX.temp[arguments[i]]=structuredClone(Game[arguments[i]])??CCX.temp[arguments[i]];
     },
     keyUp(e) {
         if (document.activeElement?.tagName=="INPUT") return;
