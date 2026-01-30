@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.004",
+    version: "1.005",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -20,9 +20,12 @@ var CCX={
     },
     savedInputs: {},
     savedSelection: "none",
+    savedScroll: -1,
     lastConfig: {},
     dirtyInputs: [],
     keys: {},
+    prefEnums: {},
+    statOps: ["SET", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"],
     numbersAndShifts: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
     menuBreak(first) {
         return `${first?"":"</div>"}<div class="CCXmenuItem">`;
@@ -113,13 +116,15 @@ var CCX={
         str+=CCX.toggleButton("milkIcons", "Show milk icon indexes");
         str+="<label>Shows icon indexes in milk tooltips</label>";
         str+=CCX.menuBreak();
-        str+=CCSE.MenuHelper.InputBox("CCX.stats.cookies", 64, Math.floor(Game.cookies), "");
-        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('cookies');", "Set cookies", "CCX.statButtons.cookies");
-        str+="<label>Sets your cookie count</label>";
+        str+=CCSE.MenuHelper.InputBox("CCX.stats.cookies", 64, Math.round(Game.cookies), "");
+        str+=CCX.prefEnum("", "CCX.statOp.cookies", CCX.statOps);
+        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('cookies');", "Modify cookies", "CCX.statButtons.cookies");
+        str+="<label>Modifies your cookie count</label>";
         str+=CCX.menuBreak();
-        str+=CCSE.MenuHelper.InputBox("CCX.stats.lumps", 32, Game.lumps, "");
-        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('lumps');", "Set lumps", "CCX.statButtons.lumps");
-        str+="<label>Sets your lump count</label>";
+        str+=CCSE.MenuHelper.InputBox("CCX.stats.lumps", 32, Math.round(Game.lumps), "");
+        str+=CCX.prefEnum("", "CCX.statOp.lumps", CCX.statOps);
+        str+=CCSE.MenuHelper.ActionButton("CCX.menuStatChange('lumps');", "Modify lumps", "CCX.statButtons.lumps");
+        str+="<label>Modifies your lump count</label>";
         str+=CCX.menuBreak();
         str+=CCX.toggleButton("party", "Party mode");
         str+="<label>Toggles party mode</label>";
@@ -195,6 +200,7 @@ var CCX={
                 l(CCX.savedSelection.id).focus();
                 l(CCX.savedSelection.id).setSelectionRange(CCX.savedSelection.start, CCX.savedSelection.end);
             };
+            if (CCX.savedScroll!=-1) l("menu").scrollTop=CCX.savedScroll;
             CCX.addMenuListeners();
             CCX.updateSearch();
         });
@@ -232,7 +238,8 @@ var CCX={
         });
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", 'loc("%1 ago",startDate)', '`${loc("%1 ago",startDate)} <small>(${CCX.formatDate(new Date(Game.startDate), "M/D/Y h:m:s i")})</small>`', 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "l('menu').innerHTML=str;", 'if (Game.onMenu=="prefs") {[...(l("menu").querySelectorAll("input"))].filter(i=>i?.id).forEach(i=>CCX.savedInputs[i.id]=i?.value);};', -1);
-        CCSE.SpliceCodeIntoFunction("Game.UpdateMenu", 2, 'if (Game.onMenu=="prefs") {if (getSelection().rangeCount) {CCX.savedSelection=structuredClone({start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd, id: document.activeElement?.id});} else {CCX.savedSelection="none";};};');
+        CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", `str+='<div class="section">'+loc("Options")+'</div>';
+`, 'if (getSelection().rangeCount) {CCX.savedSelection=structuredClone({start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd, id: document.activeElement?.id});} else {CCX.savedSelection="none";}; CCX.savedScroll=l("menu")?.scrollTop;', -1);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((achievementsOwned/achievementsTotal)*100)", "(Math.trunc((achievementsOwned/achievementsTotal)*10000)/100)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "Math.floor((upgradesOwned/upgradesTotal)*100)", "(Math.trunc((upgradesOwned/upgradesTotal)*10000)/100)", 0);
         CCSE.ReplaceCodeIntoFunction("Game.UpdateMenu", "' - '+milk.name", "' - '+milk.name+(CCX.config.milkIcons?` ${JSON.stringify(milk.icon)}`:'')", 0);
@@ -268,7 +275,7 @@ var CCX={
                 color: #fff; 
 	            background: url(img/darkNoise.jpg);
                 border-color: #ece2b6 #875526 #733726 #dfbc9a; 
-	            border-radius:4px;
+	            border-radius: 4px;
             }
             .lockedTitle.CCXxray {
                 display: none !important;
@@ -304,6 +311,7 @@ var CCX={
         AddEvent(window, "keydown", CCX.keyDown);
         AddEvent(window, "keyup", CCX.keyUp);
         Game.BuildStore();
+        if (Game.onMenu) Game.UpdateMenu(); // prevents a crash if the mod finishes loading while prefs are open
         CCX.isLoaded=true;
     },
     keyUp(e) {
@@ -366,23 +374,61 @@ var CCX={
             ].forEach(i=>[...document.querySelectorAll(i)].forEach(o=>o.classList.add("CCXxray")));
         } else [...document.querySelectorAll(".CCXxray")].forEach(i=>i.classList.remove("CCXxray"));
         if (Game.onMenu=="prefs") {
+            for (let i in CCX.prefEnums) if (l(i)) CCX.prefEnums[i].updateButton();
             CCX.inputSetStat(l("CCX.stats.cookies"), Math.round(Game.cookies));
             CCX.inputSetStat(l("CCX.stats.lumps"), Math.round(Game.lumps));
         };
         Object.keys(CCX.keys).forEach(k=>{if (CCX.keys[k]) CCX.keys[k]++;});
         CCX.lastConfig=structuredClone(CCX.config);
     },
+    prefEnum(text, id, options) {
+        if (!CCX.prefEnums[id]) CCX.prefEnums[id]={
+            value: 0,
+            id: id,
+            options: structuredClone(options),
+            text: text,
+            nextOption() {
+                this.value=(this.value+1)%this.options.length;
+                this.updateButton();
+            },
+            updateButton() {
+                l(this.id).innerHTML=this.getButtonString();
+            },
+            getButtonString() {
+                return `<span onmousedown='CCX.prefEnumNext(\`${id}\`);'>${this.text}${this.text.length?" ":""}<strong>${this.option}</strong></span>`;
+            },
+            get option() {
+                return this.options[this.value];
+            }
+        };
+        return CCSE.MenuHelper.ActionButton(`CCX.prefEnumNext('${id}');`, CCX.prefEnums[id].getButtonString(), id);
+    },
+    prefEnumNext(id) {
+        CCX.prefEnums[id].nextOption();
+    },
     inputSetStat(e, stat) {
         if (!CCX.dirtyInputs.includes(e.id)&&document.activeElement!=e) e.value=stat;
     },
     menuStatChange(stat) {
-        Game[stat]=(()=>{switch (typeof Game[stat]) {
-            case "string":
-                return String(l(`CCX.stats.${stat}`).value);
-            case "number":
+        let m=parseFloat(l(`CCX.stats.${stat}`).value);
+        if (l(`CCX.statOp.${stat}`)&&CCX.prefEnums[`CCX.statOp.${stat}`]) switch (CCX.prefEnums[`CCX.statOp.${stat}`]?.option) {
+            case "ADD":
+                Game[stat]+=m;
+                break;
+            case "SUBTRACT":
+                Game[stat]-=m;
+                break;
+            case "MULTIPLY":
+                Game[stat]*=m;
+                break;
+            case "DIVIDE":
+                Game[stat]/=m;
+                break;
             default:
-                return parseFloat(l(`CCX.stats.${stat}`).value);
-        }})();
+            case "SET":
+                Game[stat]=m;
+                break;
+        };
         CCX.dirtyInputs=CCX.dirtyInputs.filter(i=>i!=`CCX.stats.${stat}`);
     },
     nextLineHook(func, find, add) {
