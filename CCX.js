@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.005",
+    version: "1.006",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -128,8 +128,18 @@ var CCX={
         str+=CCX.menuBreak();
         str+=CCX.toggleButton("party", "Party mode");
         str+="<label>Toggles party mode</label>";
+        str+=CCX.menuBreak();
+        str+=CCSE.MenuHelper.ActionButton("CCX.showBakeryNameList();", "Show bakery names");
+        str+="<label>Shows a list of all possible random bakery names</label>";
         str+="</div></div>";
         return str;
+    },
+    showBakeryNameList() {
+        let part1=['Magic','Fantastic','Fancy','Sassy','Snazzy','Pretty','Cute','Pirate','Ninja','Zombie','Robot','Radical','Urban','Cool','Hella','Sweet','Awful','Double','Triple','Turbo','Techno','Disco','Electro','Dancing','Wonder','Mutant','Space','Science','Medieval','Future','Captain','Bearded','Lovely','Tiny','Big','Fire','Water','Frozen','Metal','Plastic','Solid','Liquid','Moldy','Shiny','Happy','Happy Little','Slimy','Tasty','Delicious','Hungry','Greedy','Lethal','Professor','Doctor','Power','Chocolate','Crumbly','Choklit','Righteous','Glorious','Mnemonic','Psychic','Frenetic','Hectic','Crazy','Royal','El','Von'];
+        let part2=['Cookie','Biscuit','Muffin','Scone','Cupcake','Pancake','Chip','Sprocket','Gizmo','Puppet','Mitten','Sock','Teapot','Mystery','Baker','Cook','Grandma','Click','Clicker','Spaceship','Factory','Portal','Machine','Experiment','Monster','Panic','Burglar','Bandit','Booty','Potato','Pizza','Burger','Sausage','Meatball','Spaghetti','Macaroni','Kitten','Puppy','Giraffe','Zebra','Parrot','Dolphin','Duckling','Sloth','Turtle','Goblin','Pixie','Gnome','Computer','Pirate','Ninja','Zombie','Robot'];
+        let names=new Array();
+        for (let i in part1) for (let o in part2) names.push(`${part1[i]} ${part2[o]}`);
+        Game.Prompt(`<h3>Bakery Names</h3><textarea class='CCXbakeryNamesArea'>${names.join("\n")}</textarea>`, [loc("Close")]);
     },
     setLumps(lumps) {
         Game.lumpsTotal+=lumps-Game.lumps;
@@ -201,7 +211,7 @@ var CCX={
                 l(CCX.savedSelection.id).setSelectionRange(CCX.savedSelection.start, CCX.savedSelection.end);
             };
             if (CCX.savedScroll!=-1) l("menu").scrollTop=CCX.savedScroll;
-            CCX.addMenuListeners();
+            CCX.addPrefsMenuListeners();
             CCX.updateSearch();
         });
         Game.customOpenSesame.push(()=>{
@@ -269,6 +279,9 @@ var CCX={
         e.innerHTML=`
             #CCSEversionNumber, #CCXversionNumber {
                 cursor: pointer; !important
+            }
+            .CCXbakeryNamesArea {
+                height: 400px; 
             }
             #CCXlisting input {
                 appearance: none;
@@ -347,7 +360,7 @@ var CCX={
         };
         return true;
     },
-    addMenuListeners() {
+    addPrefsMenuListeners() {
         [...l("menu").querySelectorAll("input")].forEach(i=>{AddEvent(i, "focus", (e)=>CCX.dirtyInputs.push(e.target.id));});
         AddEvent(l("CCX.menu.search"), "keydown", CCX.updateSearch);
         AddEvent(l("CCX.menu.search"), "keyup", CCX.updateSearch);
