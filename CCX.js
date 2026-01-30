@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.007",
+    version: "1.008",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -29,7 +29,7 @@ var CCX={
     prefEnums: {},
     editorIncludeTypes: ["number", "string", "boolean"],
     p: {
-        recalc: [
+        recalc: [ // gamevars to be frozen when disableCPSRecalc is true
             "cookiesPs", 
             "cookiesPsRaw", 
             "cookiesPsRawHighest", 
@@ -303,6 +303,7 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.showLangSelection", '+loc("note: this will save and reload your game")+', "')('+loc('another note: translations of certain strings modified by CCX may break')+", 1);
         CCSE.ReplaceCodeIntoFunction("Game.spendLump", "ask if we want to spend N lumps (unless free)", "if (CCX.config.freeStuff) free=true;", 1);
         CCSE.ReplaceCodeIntoFunction("Game.CalculateGains", "Game.cookiesPs=0;", "CCX.writeToTemp(...CCX.p.recalc);", -1);
+        CCSE.ReplaceCodeIntoFunction("Game.CalculateGains", "Game.recalculateGains=0;", "CCX.cpsHook();", -1);
         CCX.hookObjects();
         AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");});
         e=l("CCSEversionNumber").cloneNode();
@@ -360,18 +361,14 @@ var CCX={
         `;
         document.body.appendChild(e);
         Game.modHooks["draw"].push(CCX.draw);
-        Game.modHooks["cps"].push((input)=>{
-            if (CCX.config.disableCPSRecalc) {
-                CCX.readFromTemp(...CCX.p.recalc);
-                return CCX.temp["cookiesPs"];
-            };
-            return input;
-        });
         AddEvent(window, "keydown", CCX.keyDown);
         AddEvent(window, "keyup", CCX.keyUp);
         Game.BuildStore();
         if (Game.onMenu) Game.UpdateMenu(); // prevents a crash if the mod finishes loading while prefs are open
         CCX.isLoaded=true;
+    },
+    cpsHook() {
+        if (CCX.config.disableCPSRecalc) CCX.readFromTemp(...CCX.p.recalc);
     },
     readFromTemp() {
         for (let i in arguments) Game[arguments[i]]=structuredClone(CCX.temp[arguments[i]])??Game[arguments[i]];
