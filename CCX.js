@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.009",
+    version: "1.010",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -17,7 +17,9 @@ var CCX={
         upgradeIcons: false,
         achievementIcons: false,
         party: false,
-        disableCPSRecalc: false
+        disableCPSRecalc: false,
+        noSoilReq: false,
+        noGrimoireFail: false
     },
     temp: {},
     savedInputs: {},
@@ -161,6 +163,12 @@ var CCX={
         str+=CCX.menuBreak();
         str+=CCX.toggleButton("disableCPSRecalc", "Disable CPS recalculation", (state)=>{if (!state) Game.CalculateGains()});
         str+="<label>Disables recalculation of cookies per second</label>";
+        str+=CCX.menuBreak();
+        str+=CCX.toggleButton("noSoilReq", "Soil bypass");
+        str+="<label>Removes the unlock requirement for all soils in the garden</label>";
+        str+=CCX.menuBreak();
+        str+=CCX.toggleButton("noGrimoireFail", "Grimoire luck");
+        str+="<label>Grimoire spells never fail</label>";
         str+="</div></div>";
         return str;
     },
@@ -312,6 +320,8 @@ var CCX={
         CCSE.ReplaceCodeIntoFunction("Game.spendLump", "ask if we want to spend N lumps (unless free)", "if (CCX.config.freeStuff) free=true;", 1);
         CCSE.ReplaceCodeIntoFunction("Game.CalculateGains", "Game.cookiesPs=0;", "CCX.writeToTemp(...CCX.p.recalc);", -1);
         CCSE.ReplaceCodeIntoFunction("Game.CalculateGains", "Game.recalculateGains=0;", "CCX.cpsHook();", -1);
+        CCSE.MinigameReplacer(CCX.alterFarm, "Farm");
+        CCSE.MinigameReplacer(CCX.alterGrimoire, "Wizard tower");
         CCX.hookObjects();
         AddEvent(l("CCSEversionNumber"), "mousedown", (e)=>{window.open("https://klattmose.github.io/CookieClicker/CCSE-POCs/", "_blank");});
         e=l("CCSEversionNumber").cloneNode();
@@ -394,6 +404,29 @@ var CCX={
         CCX.keys[e.key]=1;
         if (CCX.numbersAndShifts.includes(e.key)&&CCX.isKeyDown("b", CCX.cases.BOTH)) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].buy(1);
         if (CCX.numbersAndShifts.includes(e.key)&&CCX.isKeyDown("s", CCX.cases.BOTH)) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].sell(1);
+    },
+    alterFarm() {
+        let minigame=Game.Objects["Farm"].minigame;
+        CCSE.ReplaceCodeIntoFunction('Game.Objects["Farm"].minigame.getCost', "if (Game.Has('Turbo-charged soil')) return 0;", "if (CCX.config.freeStuff) return 0;", 1);
+        for (let i in minigame.soils) {
+            minigame.soils[i].realReq=minigame.soils[i].req;
+            Object.defineProperty(minigame.soils[i], "req", {
+                get() {
+                    if (CCX.config.noSoilReq) return 0;
+                    return minigame.soils[i].realReq;
+                },
+                set(x) {
+                    minigame.soils[i].realReq=x;
+                }
+            });
+        };
+        minigame.hookedByCCX=true;
+    },
+    alterGrimoire() {
+        let minigame=Game.Objects["Wizard tower"].minigame;
+        CCSE.ReplaceCodeIntoFunction('Game.Objects["Wizard tower"].minigame.getSpellCost', "var out=spell.costMin;", "if (CCX.config.freeStuff) return 0;", -1);
+        CCSE.ReplaceCodeIntoFunction('Game.Objects["Wizard tower"].minigame.getFailChance', "var failChance=0.15;", "if (CCX.config.noGrimoireFail) return 0;", -1);
+        minigame.hookedByCCX=true;
     },
     updateSearch() {
         let query=l("CCX.menu.search").value;
