@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.008",
+    version: "1.009",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -25,7 +25,15 @@ var CCX={
     savedScroll: -1,
     lastConfig: {},
     dirtyInputs: [],
+    cases: {
+        ONLY: 0,
+        BOTH: 1
+    },
     keys: {},
+    isKeyDown(key, keyCase=CCX.cases.ONLY) { 
+        if (keyCase==CCX.cases.ONLY) return Object.hasOwn(CCX.keys, key);
+        if (keyCase==CCX.cases.BOTH) return Object.hasOwn(CCX.keys, key.toLowerCase())||Object.hasOwn(CCX.keys, key.toUpperCase());
+    },
     prefEnums: {},
     editorIncludeTypes: ["number", "string", "boolean"],
     p: {
@@ -384,7 +392,8 @@ var CCX={
     keyDown(e) {
         if (document.activeElement?.tagName=="INPUT") return;
         CCX.keys[e.key]=1;
-        if (CCX.numbersAndShifts.includes(e.key)&&(CCX.keys["b"]||CCX.keys["B"])) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].buy(1);
+        if (CCX.numbersAndShifts.includes(e.key)&&CCX.isKeyDown("b", CCX.cases.BOTH)) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].buy(1);
+        if (CCX.numbersAndShifts.includes(e.key)&&CCX.isKeyDown("s", CCX.cases.BOTH)) Game.ObjectsById[CCX.numbersAndShifts.indexOf(e.key)].sell(1);
     },
     updateSearch() {
         let query=l("CCX.menu.search").value;
@@ -416,8 +425,8 @@ var CCX={
     },
     draw() {
         CCX.hookObjects(); // in case any new objects have been added that we need to hook
-        if (CCX.keys["b"]||CCX.keys["B"]) Game.buyBulk=1;
-        if (CCX.keys["s"]||CCX.keys["S"]) Game.storeBulkButton(1);
+        if (CCX.isKeyDown("b", CCX.cases.BOTH)||CCX.isKeyDown("s", CCX.cases.BOTH)) Game.buyBulk=1;
+        if (CCX.isKeyDown("s", CCX.cases.BOTH)) Game.storeBulkButton(1);
         if (CCX.config.doAutoClick&&Game.drawT%CCX.config.autoClickTime==0) Game.ClickCookie();
         [...document.querySelectorAll(".storeBulkAmount")].forEach(i=>i.classList.remove("selected"));
         if (Game.buyBulk!=-1&&l(`storeBulk${Game.buyBulk}`)) l(`storeBulk${Game.buyBulk}`).classList.add("selected");
