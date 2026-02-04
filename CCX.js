@@ -1,7 +1,7 @@
 Game.LoadMod("https://klattmose.github.io/CookieClicker/CCSE.js");
 var CCX={
     name: "CCX",
-    version: "1.010",
+    version: "1.011",
     isLoaded: false,
     toggleButtons: [],
     config: {
@@ -21,6 +21,7 @@ var CCX={
         noSoilReq: false,
         noGrimoireFail: false
     },
+    saves: [],
     temp: {},
     savedInputs: {},
     savedSelection: "none",
@@ -31,6 +32,7 @@ var CCX={
         ONLY: 0,
         BOTH: 1
     },
+    openSaveId: -1,
     keys: {},
     isKeyDown(key, keyCase=CCX.cases.ONLY) { 
         if (keyCase==CCX.cases.ONLY) return Object.hasOwn(CCX.keys, key);
@@ -169,8 +171,65 @@ var CCX={
         str+=CCX.menuBreak();
         str+=CCX.toggleButton("noGrimoireFail", "Grimoire luck");
         str+="<label>Grimoire spells never fail</label>";
+        str+=CCX.menuBreak();
+        str+=CCSE.MenuHelper.ActionButton("CCX.openSaveManager();", "Open save manager");
         str+="</div></div>";
         return str;
+    },
+    openSaveManager() {
+        Game.Prompt(`<div id='CCXsaveListArea'></div><br><div class='CCXsaveInfoArea'></div><br>${CCSE.MenuHelper.ActionButton("CCX.newSave();", "New Save")}`, [loc("Close")]);
+        l("CCXsaveListArea").innerHTML=CCX.getSaveListString();
+    },
+    newSave() {
+        CCX.saves.push({
+            name: CCX.formatDate(new Date(), "M/D/Y h:m:s i"),
+            date: Date.now(),
+            version: Game.version,
+            data: JSON.stringify(Game.WriteSave(1)),
+            uniqueId: Math.max(...CCX.saves.map(i=>i.uniqueId), 0)+1
+        });
+        CCX.refreshSaveManager();
+    },
+    refreshSaveManager() {
+        Game.ClosePrompt();
+        CCX.openSaveManager();
+    },
+    getSaveListString() {
+        let str="";
+        CCX.saves.forEach(save=>{
+            str+=CCSE.MenuHelper.ActionButton(`CCX.openSaveInfo(${save.uniqueId});`, save.name, `CCXsaveButton${save.uniqueId}`);
+            str+="<br>";
+        });
+        return str;
+    },
+    openSaveInfo(id) {
+        let save=CCX.saves.filter(i=>i.uniqueId==id)[0];
+        let str="";
+        str+=`<b>Save name:</b> <input class='CCXinput' type='text' spellcheck='false' id='CCXsaveNameArea'><br>`;
+        str+=`<b>Save id:</b> ${save.uniqueId}<br>`;
+        str+=`<b>Save version:</b> ${save.version}<br>`;
+        str+=`<b>Save date:</b> ${save.date}<br>`;
+        str+=CCSE.MenuHelper.ActionButton(`CCX.loadSave(${save.uniqueId});`, "Load");
+        str+=CCSE.MenuHelper.ActionButton(`CCX.deleteSave(${save.uniqueId});`, "Delete");
+        document.querySelector(".CCXsaveInfoArea").innerHTML=str;
+        l("CCXsaveNameArea").value=save.name;
+        CCX.openSaveId=id;
+        AddEvent(l("CCXsaveNameArea"), "keyup", (e)=>{
+            CCX.getSaveById(CCX.openSaveId).name=e.target.value;
+            l(`CCXsaveButton${CCX.openSaveId}`).innerHTML=CCX.getSaveById(CCX.openSaveId).name;
+        });
+    },
+    loadSave(id) {
+        CCX.temp["cancel"]=false;
+        Game.ClosePrompt();
+        Game.Prompt(`Are you sure you want to load save <b>${CCX.getSaveById(id).name}?</b>`, [[loc("Yes"), `Game.LoadSave(JSON.parse(CCX.getSaveById(${id}).data)); Game.ClosePrompt();`], [loc("No"), `Game.ClosePrompt(); CCX.openSaveManager(); CCX.openSaveInfo(${id});`]]);
+    },
+    getSaveById(id) {
+        return CCX.saves.filter(save=>save.uniqueId==id)[0]||"NO SAVE";
+    },
+    deleteSave(id) {
+        CCX.saves=CCX.saves.filter(save=>save.uniqueId!=id);
+        CCX.refreshSaveManager();
     },
     openEditor() {
         Game.Prompt(`<textarea spellcheck='false' class='CCXeditorArea'></textarea>`, [[loc("Save"), "CCX.doEditorSave();"], [loc("Sync"), "CCX.syncEditorContent();"], [loc("Close"), "Game.ClosePrompt();"]], "", "CCXeditorPrompt");
@@ -242,7 +301,11 @@ var CCX={
         CCX.modifyCCSE();
         CCX.configDefaults=structuredClone(CCX.config);
         if (localStorageGet("CCX")) CCX.config=JSON.parse(localStorageGet("CCX"));
-        CCSE.customSave.push(()=>{localStorageSet("CCX", JSON.stringify(CCX.config));});
+        if (localStorageGet("CCXsaves")) CCX.saves=JSON.parse(localStorageGet("CCXsaves"));
+        CCSE.customSave.push(()=>{
+            localStorageSet("CCX", JSON.stringify(CCX.config));
+            localStorageSet("CCXsaves", JSON.stringify(CCX.saves));
+        });
         CCX.loadLoc();
         Game.customOptionsMenu.push(()=>{
             CCSE.AppendCollapsibleOptionsMenu(CCX.name, CCX.getMenuString());
@@ -341,7 +404,16 @@ var CCX={
             .CCXeditorArea {
                 font-size: 11px;
             }
-            #CCXlisting input {
+            #CCXsaveListArea {
+                width: 240px;
+                height: 200px;
+                backdrop-filter: brightness(50%);
+                overflow: scroll;
+	            border: 2px solid #e2dd48;
+	            border-color: #ece2b6 #875526 #733726 #dfbc9a;
+	            border-radius: 2px;
+            }
+            #CCXlisting input, .CCXinput {
                 appearance: none;
                 color: #fff; 
 	            background: url(img/darkNoise.jpg);
